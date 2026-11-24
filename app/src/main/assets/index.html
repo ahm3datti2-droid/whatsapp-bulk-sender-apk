@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>مرسل واتساب الجماعي</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#f0f2f5;color:#111b21;padding:12px;max-width:800px;margin:0 auto}
+header{background:#075e54;color:#fff;border-radius:14px;padding:18px 16px;text-align:center;margin-bottom:12px}
+header h1{font-size:22px;margin-bottom:4px}
+header p{font-size:13px;opacity:.9}
+.warn{background:#fff3cd;border:1px solid #ffc107;border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:14px;line-height:1.7}
+.warn b{color:#856404}
+.card{background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.card h2{font-size:17px;color:#075e54;margin-bottom:10px}
+label{font-size:13px;font-weight:700;display:block;margin:8px 0 4px}
+textarea,input[type=text],input[type=password],select{width:100%;padding:10px;border:1px solid #ccc;border-radius:10px;font-size:15px;font-family:inherit}
+textarea{min-height:90px;resize:vertical}
+.btn{display:inline-block;border:none;border-radius:10px;padding:12px 16px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin:4px 2px}
+.btn-green{background:#25d366;color:#fff}
+.btn-dark{background:#075e54;color:#fff}
+.btn-grey{background:#e9edef;color:#111b21}
+.btn-red{background:#dc3545;color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>*{flex:1;min-width:140px}
+.stats{display:flex;gap:8px;margin-top:10px}
+.stat{flex:1;background:#f0f2f5;border-radius:10px;padding:10px;text-align:center}
+.stat b{display:block;font-size:20px;color:#075e54}
+.stat span{font-size:12px;color:#667781}
+table{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}
+th,td{border-bottom:1px solid #eee;padding:8px 4px;text-align:right}
+th{color:#667781;font-size:12px}
+.sent{color:#25d366;font-weight:700}
+.pending{color:#f0a020;font-weight:700}
+.preview{background:#dcf8c6;border-radius:10px;padding:12px;font-size:15px;line-height:1.8;white-space:pre-wrap;margin-top:8px}
+.queue-box{text-align:center;padding:8px 0}
+.queue-box .who{font-size:20px;font-weight:800;margin:6px 0}
+.queue-box .phone{font-size:16px;color:#667781;direction:ltr}
+.progress{height:10px;background:#e9edef;border-radius:6px;overflow:hidden;margin:10px 0}
+.progress>div{height:100%;background:#25d366;width:0%}
+.timer{font-size:14px;color:#856404;font-weight:700}
+.hint{font-size:12px;color:#667781;line-height:1.7;margin-top:6px}
+footer{text-align:center;font-size:12px;color:#8696a0;padding:14px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>📣 مرسل واتساب الجماعي</h1>
+  <p>عروض وتسويق لعملائك من رقمك — بضغطة لكل عميل من واتساب الرسمي</p>
+</header>
+
+<div class="warn">⚠️ <b>مهم عشان رقمك ميتحظرش:</b> استنى <b>10–20 ثانية</b> بين كل رسالة والتانية، ومتزودش عن <b>80–100 عميل في اليوم</b> من الرقم الشخصي. التطبيق بيفتح واتساب الرسمي بس، و<b>إنت اللي بتدوس إرسال</b> — مفيش إرسال تلقائي في الخلفية.</div>
+
+<div class="card">
+  <h2>1️⃣ العملاء — استيراد من إكسل / CSV</h2>
+  <label>ارفع ملف (CSV أو XLSX)</label>
+  <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.txt">
+  <label>أو الصق من إكسل (كل سطر: الاسم ثم الرقم — مفصولين بـ Tab أو فاصلة)</label>
+  <textarea id="pasteBox" placeholder="مثال:&#10;أحمد محمد&#9;01001234567&#10;سارة علي&#9;01112345678"></textarea>
+  <div class="row">
+    <button class="btn btn-dark" onclick="importPasted()">📥 استيراد من اللصق</button>
+    <button class="btn btn-grey" onclick="clearContacts()">🗑️ مسح الكل</button>
+  </div>
+  <p class="hint">الصيغة المقبولة: عمود للاسم وعمود للرقم. الأرقام المصرية بتتظبط تلقائياً (010... ← 20...) والأرقام المكررة والغلط بتتخطى. ملف XLSX بيحتاج إنترنت أول مرة لتحميل مكتبة SheetJS، ولو مفيش نت استخدم CSV أو اللصق.</p>
+  <div class="stats">
+    <div class="stat"><b id="totalCount">0</b><span>إجمالي العملاء</span></div>
+    <div class="stat"><b id="sentCount">0</b><span>تم الإرسال</span></div>
+    <div class="stat"><b id="leftCount">0</b><span>متبقي</span></div>
+  </div>
+  <div class="row">
+    <input type="text" id="listName" placeholder="اسم القايمة (مثال: عملاء العيد)">
+    <button class="btn btn-grey" onclick="saveList()">💾 حفظ كقايمة</button>
+  </div>
+  <div class="row">
+    <select id="listSelect"><option value="">— اختر قايمة محفوظة —</option></select>
+    <button class="btn btn-grey" onclick="loadList()">📂 تحميل القايمة</button>
+    <button class="btn btn-red" onclick="deleteList()">حذف القايمة</button>
+  </div>
+  <div style="max-height:220px;overflow:auto">
+  <table>
+    <thead><tr><th>الاسم</th><th>الرقم</th><th>الحالة</th><th></th></tr></thead>
+    <tbody id="contactsBody"><tr><td colspan="4" style="text-align:center;color:#8696a0">لسه مفيش عملاء — استورد ملفك</td></tr></tbody>
+  </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>2️⃣ الرسالة والقوالب</h2>
+  <label>قالب جاهز</label>
+  <div class="row">
+    <select id="templateSelect" onchange="applyTemplate()"></select>
+    <button class="btn btn-grey" onclick="saveTemplate()">💾 حفظ القالب الحالي</button>
+  </div>
+  <label>نص الرسالة (استخدم {الاسم} لاسم العميل)</label>
+  <textarea id="msgBox" oninput="saveState();renderPreview()"></textarea>
+  <label>معاينة الرسالة (لأول عميل)</label>
+  <div class="preview" id="previewBox">—</div>
+</div>
+
+<div class="card">
+  <h2>3️⃣ طابور الإرسال</h2>
+  <div class="queue-box">
+    <div class="progress"><div id="progressBar"></div></div>
+    <div class="who" id="queueWho">—</div>
+    <div class="phone" id="queuePhone"></div>
+    <div class="hint" id="senderLine" style="margin-top:4px"></div>
+    <div class="timer" id="timerText"></div>
+    <div style="margin-top:10px">
+      <button class="btn btn-green" id="openBtn" onclick="openWhatsApp()">💬 فتح واتساب وإرسال</button>
+      <button class="btn btn-dark" onclick="markSent()">✅ تم الإرسال — التالي</button>
+    </div>
+    <div>
+      <button class="btn btn-grey" onclick="prevContact()">⬅ السابق</button>
+      <button class="btn btn-grey" onclick="skipContact()">تخطي ⏭</button>
+      <button class="btn btn-grey" onclick="resetSent()">↺ إعادة تعيين الإرسال</button>
+    </div>
+  </div>
+  <p class="hint">الخطوات: دوس «فتح واتساب» — هيتفتح شات العميل والرسالة جاهزة — دوس إرسال في واتساب — ارجع هنا ودوس «تم الإرسال». استنى 10–20 ثانية قبل العميل اللي بعده.</p>
+</div>
+
+<div class="card">
+  <h2>4️⃣ وضع واتساب بيزنس الرسمي (Cloud API) — اختياري</h2>
+  <div class="warn">⚠️ <b>اقرأ ده قبل ما تفعّل الوضع الرسمي:</b><br>
+  • الرقم اللي بتسجّله في WhatsApp Cloud API <b>مبيشتغلش في نفس الوقت على تطبيق واتساب الموبايل</b> — الرقم بيكون مخصص للـ API بس، ومش هتقدر تستقبل وتبعت منه من تطبيق واتساب العادي.<br>
+  • رسايل العروض والتسويق لازم تكون <b>Template معتمد من Meta</b> — مينفعش تبعت نص حر كعرض. النص الحر مسموح بس خلال 24 ساعة بعد ما العميل يرد عليك.<br>
+  • لازم العميل يكون <b>موافق يستلم رسايل العروض</b> منك — إرسال لحد مش موافق ممكن يعرّض الرقم للحظر من Meta.<br>
+  • بياناتك هنا بتتخزن <b>على جهازك بس</b> (localStorage) ومبتتبعتش لأي حد غير سيرفرات Meta الرسمية وقت الإرسال.</div>
+  <label>وضع الإرسال</label>
+  <div class="row">
+    <button class="btn btn-dark" id="modeManualBtn" onclick="setApiMode(false)">📱 يدوي wa.me (الافتراضي — الآمن)</button>
+    <button class="btn btn-grey" id="modeApiBtn" onclick="setApiMode(true)">🏢 رسمي Cloud API</button>
+  </div>
+  <p class="hint" id="modeHint">الوضع الحالي: يدوي — كل ضغطة بتفتح واتساب الرسمي والرسالة جاهزة، وإنت اللي بتدوس إرسال.</p>
+  <div id="apiFields">
+    <label>Phone Number ID (من Meta Business / WhatsApp Manager)</label>
+    <input type="text" id="apiPhoneId" placeholder="مثال: 123456789012345" style="direction:ltr;text-align:left">
+    <label>WhatsApp Business Account ID (WABA ID)</label>
+    <input type="text" id="apiWabaId" placeholder="مثال: 987654321098765" style="direction:ltr;text-align:left">
+    <label>Access Token (توكن دائم من Meta — احتفظ بيه لنفسك ومتشاركوش مع حد)</label>
+    <div class="row">
+      <input type="password" id="apiToken" placeholder="EAA..." style="direction:ltr;text-align:left">
+      <button class="btn btn-grey" style="flex:0 0 auto" onclick="toggleToken()">👁 إظهار</button>
+    </div>
+    <label>اسم الـ Template المعتمد (من Meta — مثال: offer_promo)</label>
+    <input type="text" id="apiTemplate" placeholder="offer_promo" style="direction:ltr;text-align:left">
+    <label style="font-weight:400"><input type="checkbox" id="apiHasNameParam" style="width:auto"> القالب فيه متغير لاسم العميل {{1}} (لو متعلم، الاسم هيتبعت تلقائي مكان {{1}})</label>
+    <div class="row">
+      <button class="btn btn-dark" onclick="saveApiSettings()">💾 حفظ إعدادات الـ API</button>
+      <button class="btn btn-red" onclick="clearApiSettings()">🗑️ مسح بيانات الـ API</button>
+    </div>
+    <p class="hint">الإرسال الرسمي بيتم عبر: POST https://graph.facebook.com/v20.0/&lt;Phone Number ID&gt;/messages — رسالة Template بالعربي (ar). لو القالب مش معتمد أو التوكن غلط، الإرسال هيفشل وهتظهرلك رسالة الخطأ من Meta.</p>
+  </div>
+  <p class="hint" id="apiStatus"></p>
+</div>
+
+<div class="card">
+  <h2>5️⃣ إضافة رقم رسمي وتوثيقه من واتساب</h2>
+  <div class="warn">📲 <b>الكود بييجي من واتساب الرسمي نفسه — التطبيق مش بيبعت كود ولا بيخترعه.</b><br>
+  • لو إعدادات الـ API الرسمي (التوكن) متعبية في قسم 4️⃣، زرار «اطلب كود التحقق» هيطلب الكود من واتساب الرسمي عبر Cloud API.<br>
+  • لو التوكن مش متعبّي، الزرار هيفتحلك <b>WhatsApp Manager الرسمي</b> في المتصفح عشان تطلب الكود من هناك بنفسك.<br>
+  • الرقم غير الموثّق <b>مينفعش يتبعت منه بالوضع الرسمي</b> — لازم يتوثّق الأول. الوضع العادي (wa.me) بيفضل متاح على طول.</div>
+  <label>رقم المرسل الرسمي (بالصيغة الدولية)</label>
+  <div class="row">
+    <input type="text" id="senderPhone" placeholder="+201117543009" style="direction:ltr;text-align:left">
+    <button class="btn btn-dark" style="flex:0 0 auto" onclick="addSenderNumber()">➕ إضافة الرقم</button>
+  </div>
+  <p class="hint" id="senderStatus">لسه مفيش رقم مرسل مضاف — ضيف رقمك الرسمي الأول.</p>
+  <label>اطلب كود التحقق من واتساب الرسمي</label>
+  <div class="row">
+    <button class="btn btn-green" id="requestCodeBtn" onclick="requestCode()">📩 اطلب كود التحقق</button>
+    <button class="btn btn-grey" onclick="removeSender()">🗑️ حذف الرقم</button>
+  </div>
+  <p class="hint" id="codeRequestStatus"></p>
+  <label>كود التحقق (6 أرقام — اللي وصلك من واتساب الرسمي)</label>
+  <div class="row">
+    <input type="text" id="verifyCodeInput" placeholder="123456" maxlength="6" inputmode="numeric" style="direction:ltr;text-align:left">
+    <button class="btn btn-dark" style="flex:0 0 auto" onclick="verifyCode()">✅ تحقق</button>
+  </div>
+  <label style="font-weight:400"><input type="checkbox" id="codeAttest" style="width:auto"> أؤكد إن الكود اللي دخلته هو اللي وصلني من واتساب الرسمي على الرقم ده (مطلوب لما يكون التوكن مش متعبّي)</label>
+  <p class="hint" id="verifyStatus"></p>
+</div>
+
+<footer>مرسل واتساب الجماعي — بياناتك محفوظة على جهازك بس (localStorage) • الإرسال اليدوي من واتساب الرسمي • الوضع الرسمي (Cloud API) اختياري من قسم 4️⃣</footer>
+
+<script>
+const LS_KEY='wbs_state_v1';
+let state={contacts:[],lists:{},templates:[],message:'',current:0,lastSentAt:0,api:{enabled:false,phoneNumberId:'',wabaId:'',token:'',template:'',hasNameParam:true},sender:{number:'',verified:false,verifiedAt:0}};
+const STARTER_TEMPLATES=[
+{name:'🎉 عرض خاص',text:'أهلاً {الاسم} 👋\nعندنا عرض خاص ليك النهاردة! خصم لفترة محدودة على كل المنتجات. نورنا في أي وقت أو رد على الرسالة دي للاستفسار. 🌟'},
+{name:'🏷️ خصم لفترة محدودة',text:'مساء الخير {الاسم} 😊\nخصم خاص لفترة محدودة — الحق العرض قبل ما يخلص! للطلب أو الاستفسار رد على الرسالة دي.'},
+{name:'🆕 جديدنا وصل',text:'أهلاً {الاسم}!\nوصل جديدنا — تشكيلة جديدة ومميزة. زورنا أو رد على الرسالة دي وهنبعتلك التفاصيل والأسعار.'}
+];
+function saveState(){localStorage.setItem(LS_KEY,JSON.stringify(state));}
+function loadState(){
+  try{const s=JSON.parse(localStorage.getItem(LS_KEY));if(s&&typeof s==='object'){state=Object.assign(state,s);}}catch(e){}
+  if(!state.templates||!state.templates.length)state.templates=STARTER_TEMPLATES;
+  if(!state.message)state.message=state.templates[0].text;
+  if(!state.api||typeof state.api!=='object')state.api={enabled:false,phoneNumberId:'',wabaId:'',token:'',template:'',hasNameParam:true};
+  if(!state.sender||typeof state.sender!=='object')state.sender={number:'',verified:false,verifiedAt:0};
+}
+function normalizePhone(raw){
+  if(raw==null)return null;
+  let d=String(raw).replace(/[^\d]/g,'');
+  if(!d)return null;
+  if(d.startsWith('0020'))d=d.slice(4);
+  if(d.startsWith('20')&&d.length===12){/* already international */}
+  else if(d.startsWith('0'))d='20'+d.slice(1);
+  else if(d.length===11&&d.startsWith('01'))d='20'+d.slice(1);
+  else if(d.length===10&&d.startsWith('1'))d='20'+d;
+  if(!/^20(10|11|12|15)\d{8}$/.test(d))return null;
+  return d;
+}
+function parseRows(text){
+  const out=[];const seen=new Set(state.contacts.map(c=>c.phone));
+  text.split(/\r?\n/).forEach(line=>{
+    if(!line.trim())return;
+    const parts=line.split(/[\t,;|]/).map(s=>s.trim()).filter(Boolean);
+    if(parts.length<1)return;
+    let name='',phoneRaw='';
+    if(parts.length>=2){name=parts[0];phoneRaw=parts[1];}
+    else{phoneRaw=parts[0];name='عميل';}
+    if(/^(الاسم|name|phone|الرقم|رقم|الهاتف)/i.test(phoneRaw))return;
+    if(/^(الاسم|name)$/i.test(name)&&parts.length>=2)return;
+    const phone=normalizePhone(phoneRaw);
+    if(!phone||seen.has(phone))return;
+    seen.add(phone);out.push({name:name||'عميل',phone:phone,sent:false});
+  });
+  return out;
+}
+function importPasted(){
+  const rows=parseRows(document.getElementById('pasteBox').value);
+  if(!rows.length){alert('مفيش أرقام صحيحة في النص — اتأكد إن كل سطر فيه الاسم والرقم');return;}
+  state.contacts=state.contacts.concat(rows);saveState();renderAll();
+  alert('تمت إضافة '+rows.length+' عميل');
+}
+function importFile(file){
+  if(!file)return;
+  const name=file.name.toLowerCase();
+  if((name.endsWith('.xlsx')||name.endsWith('.xls'))&&window.XLSX){
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1});
+        const text=rows.map(r=>r.join('\t')).join('\n');
+        const added=parseRows(text);
+        if(!added.length){alert('مفيش أرقام صحيحة في الملف');return;}
+        state.contacts=state.contacts.concat(added);saveState();renderAll();
+        alert('تمت إضافة '+added.length+' عميل من ملف الإكسل');
+      }catch(err){alert('تعذّر قراءة ملف الإكسل — جرّب حفظه CSV أو انسخ الأعمدة والصقها');}
+    };
+    reader.readAsArrayBuffer(file);
+  }else{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const added=parseRows(String(e.target.result));
+      if(!added.length){alert('مفيش أرقام صحيحة في الملف');return;}
+      state.contacts=state.contacts.concat(added);saveState();renderAll();
+      alert('تمت إضافة '+added.length+' عميل');
+    };
+    reader.readAsText(file);
+  }
+}
+document.getElementById('fileInput').addEventListener('change',e=>{importFile(e.target.files[0]);e.target.value='';});
+function clearContacts(){if(!state.contacts.length)return;if(!confirm('هتمسح كل العملاء؟'))return;state.contacts=[];state.current=0;saveState();renderAll();}
+function removeContact(i){state.contacts.splice(i,1);if(state.current>=state.contacts.length)state.current=Math.max(0,state.contacts.length-1);saveState();renderAll();}
+function saveList(){
+  const n=document.getElementById('listName').value.trim();
+  if(!n){alert('اكتب اسم القايمة الأول');return;}
+  if(!state.contacts.length){alert('مفيش عملاء عشان تحفظهم');return;}
+  state.lists[n]=state.contacts.map(c=>({...c}));saveState();renderLists();alert('تم حفظ القايمة «'+n+'»');
+}
+function loadList(){
+  const n=document.getElementById('listSelect').value;if(!n)return;
+  state.contacts=state.lists[n].map(c=>({...c,sent:false}));state.current=0;saveState();renderAll();alert('تم تحميل قايمة «'+n+'»');
+}
+function deleteList(){
+  const n=document.getElementById('listSelect').value;if(!n)return;
+  if(!confirm('هتحذف قايمة «'+n+'»؟'))return;
+  delete state.lists[n];saveState();renderLists();
+}
+function renderLists(){
+  const sel=document.getElementById('listSelect');
+  sel.innerHTML='<option value="">— اختر قايمة محفوظة —</option>'+Object.keys(state.lists).map(k=>'<option value="'+k+'">'+k+' ('+state.lists[k].length+')</option>').join('');
+}
+function applyTemplate(){
+  const i=document.getElementById('templateSelect').value;
+  if(i==='')return;
+  state.message=state.templates[i].text;document.getElementById('msgBox').value=state.message;saveState();renderPreview();
+}
+function saveTemplate(){
+  const t=document.getElementById('msgBox').value.trim();if(!t){alert('اكتب رسالة الأول');return;}
+  const name=prompt('اسم القالب:', 'قالب مخصص');if(!name)return;
+  state.templates.push({name:name,text:t});saveState();renderTemplates();alert('تم حفظ القالب');
+}
+function renderTemplates(){
+  const sel=document.getElementById('templateSelect');
+  sel.innerHTML=state.templates.map((t,i)=>'<option value="'+i+'">'+t.name+'</option>').join('');
+}
+function personalize(name){
+  return (document.getElementById('msgBox').value||'').replaceAll('{الاسم}',name||'عميل');
+}
+function renderPreview(){
+  const c=state.contacts[0];
+  document.getElementById('previewBox').textContent=c?personalize(c.name):personalize('عميل');
+}
+function renderContacts(){
+  const body=document.getElementById('contactsBody');
+  const total=state.contacts.length,sent=state.contacts.filter(c=>c.sent).length;
+  document.getElementById('totalCount').textContent=total;
+  document.getElementById('sentCount').textContent=sent;
+  document.getElementById('leftCount').textContent=total-sent;
+  if(!total){body.innerHTML='<tr><td colspan="4" style="text-align:center;color:#8696a0">لسه مفيش عملاء — استورد ملفك</td></tr>';return;}
+  body.innerHTML=state.contacts.map((c,i)=>'<tr><td>'+escapeHtml(c.name)+'</td><td style="direction:ltr">+'+c.phone+'</td><td class="'+(c.sent?'sent':'pending')+'">'+(c.sent?'✅ تم':'⏳ متبقي')+'</td><td><button class="btn btn-grey" style="padding:4px 8px" onclick="removeContact('+i+')">✕</button></td></tr>').join('');
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function currentContact(){
+  if(!state.contacts.length)return null;
+  let i=state.current;
+  while(i<state.contacts.length&&state.contacts[i].sent)i++;
+  if(i>=state.contacts.length)return null;
+  state.current=i;return state.contacts[i];
+}
+function renderQueue(){
+  const c=currentContact();
+  const total=state.contacts.length,sent=state.contacts.filter(x=>x.sent).length;
+  document.getElementById('progressBar').style.width=(total?Math.round(sent/total*100):0)+'%';
+  document.getElementById('openBtn').disabled=!c;
+  document.getElementById('openBtn').textContent=(state.api&&apiConfigured())?'🚀 إرسال عبر واتساب بيزنس API':'💬 فتح واتساب وإرسال';
+  const s=state.sender||{};
+  document.getElementById('senderLine').textContent=s.number
+    ?('المرسل: +'+s.number+(s.verified?' — ✅ موثّق رسمياً':' — ⚠️ غير موثّق (الإرسال الرسمي متوقف)'))
+    :'المرسل: رقمك الشخصي (wa.me) — أضف رقمك الرسمي ووثّقه من قسم 5️⃣.';
+  if(!c){
+    document.getElementById('queueWho').textContent=total?'🎉 خلصت كل العملاء!':'—';
+    document.getElementById('queuePhone').textContent='';
+    document.getElementById('timerText').textContent='';
+    return;
+  }
+  document.getElementById('queueWho').textContent=c.name;
+  document.getElementById('queuePhone').textContent='+'+c.phone+'  •  عميل '+(state.current+1)+' من '+total;
+  updateTimer();
+}
+function updateTimer(){
+  if(!state.lastSentAt){document.getElementById('timerText').textContent='';return;}
+  const s=Math.floor((Date.now()-state.lastSentAt)/1000);
+  document.getElementById('timerText').textContent=s<10?('⏱ استنى '+(10-s)+' ثواني كمان قبل العميل اللي بعده (الأفضل 10–20 ثانية)'):'✅ عدى '+s+' ثانية — تقدر تكمل';
+}
+setInterval(updateTimer,1000);
+function apiConfigured(){
+  const a=state.api||{};
+  return a.enabled&&a.phoneNumberId&&a.token&&a.template;
+}
+function openWhatsApp(){
+  const c=currentContact();if(!c)return;
+  if(apiConfigured()){
+    if(!state.sender||!state.sender.verified){
+      document.getElementById('apiStatus').textContent='⛔ الإرسال الرسمي متوقف — رقم المرسل مش موثّق. وثّق رقمك من قسم 5️⃣ الأول (اطلب الكود من واتساب الرسمي ودخّله)، أو ارجع للوضع اليدوي من قسم 4️⃣.';
+      return;
+    }
+    sendViaCloudApi(c);return;
+  }
+  const url='https://wa.me/'+c.phone+'?text='+encodeURIComponent(personalize(c.name));
+  window.open(url,'_blank');
+}
+function normalizeSender(raw){
+  if(raw==null)return null;
+  let d=String(raw).replace(/[^\d]/g,'');
+  if(!d)return null;
+  if(d.startsWith('0020'))d=d.slice(4);
+  if(d.startsWith('20')&&d.length===12){/* already international */}
+  else if(d.startsWith('0'))d='20'+d.slice(1);
+  else if(d.length===11&&d.startsWith('01'))d='20'+d.slice(1);
+  else if(d.length===10&&d.startsWith('1'))d='20'+d;
+  if(!/^20(10|11|12|15)\d{8}$/.test(d))return null;
+  return d;
+}
+function addSenderNumber(){
+  const n=normalizeSender(document.getElementById('senderPhone').value);
+  if(!n){alert('اكتب رقم صحيح بالصيغة الدولية — مثال: +201117543009');return;}
+  state.sender={number:n,verified:false,verifiedAt:0};
+  saveState();renderSender();renderQueue();
+  document.getElementById('senderStatus').textContent='تمت إضافة الرقم +'+n+' — لسه غير موثّق. دوس «اطلب كود التحقق» عشان واتساب الرسمي يبعتلك الكود.';
+}
+function removeSender(){
+  if(!state.sender||!state.sender.number)return;
+  if(!confirm('هتحذف رقم المرسل +'+state.sender.number+'؟'))return;
+  state.sender={number:'',verified:false,verifiedAt:0};
+  saveState();renderSender();renderQueue();
+}
+async function requestCode(){
+  const s=state.sender||{};
+  if(!s.number){alert('ضيف رقم المرسل الأول من فوق');return;}
+  const st=document.getElementById('codeRequestStatus');
+  if(apiConfigured()){
+    st.textContent='⏳ جاري طلب الكود من واتساب الرسمي عبر Cloud API...';
+    try{
+      const res=await fetch('https://graph.facebook.com/v20.0/'+encodeURIComponent(state.api.phoneNumberId)+'/request_code',{
+        method:'POST',
+        headers:{'Authorization':'Bearer '+state.api.token,'Content-Type':'application/json'},
+        body:JSON.stringify({messaging_product:'whatsapp',code_method:'SMS'})
+      });
+      const data=await res.json().catch(()=>({}));
+      if(res.ok){
+        st.textContent='✅ واتساب الرسمي بعت الكود برسالة SMS على +'+s.number+' — هيوصلك خلال دقائق. دخّل الـ 6 أرقام تحت ودوس «تحقق».';
+      }else{
+        st.textContent='❌ واتساب رفض طلب الكود: '+((data.error&&data.error.message)||('خطأ HTTP '+res.status))+' — اتأكد إن الرقم مسجّل في WhatsApp Manager وإن التوكن والـ Phone Number ID صح.';
+      }
+    }catch(err){
+      st.textContent='❌ تعذّر الاتصال بسيرفر Meta: '+(err&&err.message?err.message:err)+' — اتأكد إن فيه إنترنت.';
+    }
+    return;
+  }
+  st.textContent='ℹ️ التوكن الرسمي مش متعبّي — هنفتحلك WhatsApp Manager الرسمي في المتصفح. من هناك اختر رقمك ودوس طلب كود التحقق، والكود هيوصلك من واتساب الرسمي، وبعدها ارجع هنا ودخّله تحت.';
+  window.open('https://business.facebook.com/latest/whatsapp_manager/phone_numbers','_blank');
+}
+async function verifyCode(){
+  const s=state.sender||{};
+  const code=document.getElementById('verifyCodeInput').value.trim();
+  const vs=document.getElementById('verifyStatus');
+  if(!s.number){alert('ضيف رقم المرسل الأول');return;}
+  if(!/^\d{6}$/.test(code)){alert('الكود لازم يكون 6 أرقام بالظبط — زي ما وصلك من واتساب الرسمي');return;}
+  if(apiConfigured()){
+    vs.textContent='⏳ جاري التحقق من الكود مع واتساب الرسمي...';
+    try{
+      const res=await fetch('https://graph.facebook.com/v20.0/'+encodeURIComponent(state.api.phoneNumberId)+'/verify_code',{
+        method:'POST',
+        headers:{'Authorization':'Bearer '+state.api.token,'Content-Type':'application/json'},
+        body:JSON.stringify({messaging_product:'whatsapp',code:code})
+      });
+      const data=await res.json().catch(()=>({}));
+      if(res.ok){
+        state.sender.verified=true;state.sender.verifiedAt=Date.now();
+        saveState();renderSender();renderQueue();
+        vs.textContent='✅ تم توثيق الرقم +'+s.number+' رسمياً من واتساب — تقدر دلوقتي تبعت بالوضع الرسمي.';
+      }else{
+        vs.textContent='❌ الكود غلط أو منتهي: '+((data.error&&data.error.message)||('خطأ HTTP '+res.status))+' — اتأكد إنك دخلت آخر كود وصلك من واتساب الرسمي.';
+      }
+    }catch(err){
+      vs.textContent='❌ تعذّر الاتصال بسيرفر Meta: '+(err&&err.message?err.message:err)+' — اتأكد إن فيه إنترنت.';
+    }
+    return;
+  }
+  if(!document.getElementById('codeAttest').checked){
+    alert('علّم على تأكيد إن الكود ده هو اللي وصلك من واتساب الرسمي على الرقم — من غير التأكيد ده مينفعش نوثّق الرقم.');
+    return;
+  }
+  state.sender.verified=true;state.sender.verifiedAt=Date.now();
+  saveState();renderSender();renderQueue();
+  vs.textContent='✅ تم توثيق الرقم +'+s.number+' بناءً على تأكيدك إن الكود هو اللي وصلك من واتساب الرسمي. ملاحظة: الإرسال الرسمي نفسه لسه محتاج إعدادات الـ API (التوكن) من قسم 4️⃣ عشان يشتغل فعلاً.';
+}
+function renderSender(){
+  const s=state.sender||{number:'',verified:false,verifiedAt:0};
+  const st=document.getElementById('senderStatus');
+  if(!s.number){
+    st.textContent='لسه مفيش رقم مرسل مضاف — ضيف رقمك الرسمي الأول.';
+  }else if(s.verified){
+    const d=s.verifiedAt?new Date(s.verifiedAt).toLocaleDateString('ar-EG'):'';
+    st.textContent='المرسل الحالي: +'+s.number+' — ✅ موثّق رسمياً'+(d?' (من '+d+')':'');
+  }else{
+    st.textContent='المرسل الحالي: +'+s.number+' — ⚠️ غير موثّق — الإرسال الرسمي متوقف لحد ما تدخل كود التحقق اللي وصلك من واتساب.';
+  }
+  document.getElementById('requestCodeBtn').disabled=!s.number;
+}
+async function sendViaCloudApi(c){
+  const a=state.api;
+  const statusEl=document.getElementById('apiStatus');
+  statusEl.textContent='⏳ جاري الإرسال عبر WhatsApp Cloud API إلى '+c.name+'...';
+  const body={messaging_product:'whatsapp',to:c.phone,type:'template',template:{name:a.template,language:{code:'ar'}}};
+  if(a.hasNameParam!==false){
+    body.template.components=[{type:'body',parameters:[{type:'text',text:c.name||'عميل'}]}];
+  }
+  try{
+    const res=await fetch('https://graph.facebook.com/v20.0/'+encodeURIComponent(a.phoneNumberId)+'/messages',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+a.token,'Content-Type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    const data=await res.json().catch(()=>({}));
+    if(res.ok&&data.messages&&data.messages.length){
+      c.sent=true;state.lastSentAt=Date.now();state.current++;
+      statusEl.textContent='✅ تم الإرسال رسمياً إلى '+c.name+' (معرّف الرسالة: '+(data.messages[0].id||'—')+')';
+      saveState();renderAll();
+    }else{
+      const msg=(data.error&&data.error.message)||('خطأ HTTP '+res.status);
+      statusEl.textContent='❌ فشل الإرسال إلى '+c.name+': '+msg+' — اتأكد إن الـ Template معتمد وإن التوكن والـ Phone Number ID صح.';
+    }
+  }catch(err){
+    statusEl.textContent='❌ تعذّر الاتصال بسيرفر Meta: '+(err&&err.message?err.message:err)+' — اتأكد إن فيه إنترنت، ولو المشكلة مستمرة جرّب الوضع اليدوي.';
+  }
+}
+function setApiMode(on){
+  if(!state.api)state.api={enabled:false,phoneNumberId:'',wabaId:'',token:'',template:'',hasNameParam:true};
+  if(on&&!state.api.phoneNumberId&&!state.api.token){
+    if(!confirm('الوضع الرسمي محتاج Phone Number ID و Access Token و Template معتمد — هتكمّل الإعدادات تحت الأول؟'))return;
+  }
+  state.api.enabled=!!on;saveState();renderApi();renderQueue();
+}
+function toggleToken(){
+  const el=document.getElementById('apiToken');
+  el.type=el.type==='password'?'text':'password';
+}
+function saveApiSettings(){
+  if(!state.api)state.api={enabled:false,phoneNumberId:'',wabaId:'',token:'',template:'',hasNameParam:true};
+  state.api.phoneNumberId=document.getElementById('apiPhoneId').value.trim();
+  state.api.wabaId=document.getElementById('apiWabaId').value.trim();
+  state.api.token=document.getElementById('apiToken').value.trim();
+  state.api.template=document.getElementById('apiTemplate').value.trim();
+  state.api.hasNameParam=document.getElementById('apiHasNameParam').checked;
+  saveState();renderApi();renderQueue();
+  if(state.api.enabled&&!apiConfigured()){alert('اتحفظت الإعدادات، بس لسه ناقص Phone Number ID أو التوكن أو اسم الـ Template — كمّلهم عشان الوضع الرسمي يشتغل.');return;}
+  alert('تم حفظ إعدادات واتساب بيزنس الرسمي على جهازك');
+}
+function clearApiSettings(){
+  if(!confirm('هتمسح كل بيانات الـ API الرسمي من الجهاز؟'))return;
+  state.api={enabled:false,phoneNumberId:'',wabaId:'',token:'',template:'',hasNameParam:true};
+  saveState();renderApi();renderQueue();
+}
+function renderApi(){
+  const a=state.api||{enabled:false,phoneNumberId:'',wabaId:'',token:'',template:'',hasNameParam:true};
+  document.getElementById('apiPhoneId').value=a.phoneNumberId||'';
+  document.getElementById('apiWabaId').value=a.wabaId||'';
+  document.getElementById('apiToken').value=a.token||'';
+  document.getElementById('apiTemplate').value=a.template||'';
+  document.getElementById('apiHasNameParam').checked=a.hasNameParam!==false;
+  document.getElementById('modeManualBtn').className='btn '+(a.enabled?'btn-grey':'btn-dark');
+  document.getElementById('modeApiBtn').className='btn '+(a.enabled?'btn-dark':'btn-grey');
+  document.getElementById('apiFields').style.display=a.enabled?'block':'none';
+  document.getElementById('modeHint').textContent=a.enabled
+    ?(apiConfigured()?'الوضع الحالي: رسمي Cloud API — الإرسال هيتم أوتوماتيك برسالة Template معتمدة من Meta.':'الوضع الحالي: رسمي Cloud API — بس لسه ناقص بيانات (Phone Number ID / التوكن / اسم الـ Template)؛ كمّلها تحت.')
+    :'الوضع الحالي: يدوي — كل ضغطة بتفتح واتساب الرسمي والرسالة جاهزة، وإنت اللي بتدوس إرسال.';
+}
+function markSent(){
+  const c=currentContact();if(!c)return;
+  c.sent=true;state.lastSentAt=Date.now();state.current++;saveState();renderAll();
+}
+function skipContact(){if(state.current<state.contacts.length-1){state.current++;saveState();renderAll();}}
+function prevContact(){if(state.current>0){state.current--;saveState();renderAll();}}
+function resetSent(){if(!confirm('هترجع كل العملاء لـ «متبقي»؟'))return;state.contacts.forEach(c=>c.sent=false);state.current=0;state.lastSentAt=0;saveState();renderAll();}
+function renderAll(){renderContacts();renderLists();renderTemplates();renderPreview();renderQueue();renderApi();renderSender();}
+loadState();
+document.getElementById('msgBox').value=state.message;
+renderAll();
+</script>
+</body>
+</html>
